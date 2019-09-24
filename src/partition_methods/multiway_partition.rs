@@ -181,7 +181,11 @@ impl EvenSizedBinNodeTree {
     }
 }
 
-pub fn multi_way_partition(data: Vec<f32>, partitions: usize) -> (Vec<Vec<usize>>, f32) {
+
+/// Partition Elements into Evenly Summed Groups
+/// Uses a complete method of the Karmarkar-Karp differencing algorithm to best partition elements
+/// into a specified number of partitions.
+pub fn multiway_partition(data: Vec<f32>, partitions: usize) -> (Vec<Vec<usize>>, f32) {
     let mut group = EvenSizedBinNodeTree::new(data, partitions).flatten_node_tree();
     group.sort_by(|a,b| {
         (b.1).partial_cmp(&(a.1)).unwrap_or(std::cmp::Ordering::Equal)

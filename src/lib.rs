@@ -1,10 +1,10 @@
 pub mod partition_methods;
 pub (crate) mod permutations;
 
-use crate::partition_methods::multiway_partition::{multi_way_partition};
+use crate::partition_methods::multiway_partition::{multiway_partition};
 
 fn evenly_partition_input(input: Vec<f32>, partitions: usize) -> Vec<Vec<usize>> {
-    let (groups, _) = multi_way_partition(input, partitions);
+    let (groups, _) = multiway_partition(input, partitions);
     groups
 }
 
