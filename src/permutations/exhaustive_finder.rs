@@ -1,6 +1,6 @@
 use std::iter::Iterator;
 
-fn exhaustive_permutations(input: Vec<usize>, processed_input: Vec<bool>) -> Vec<Vec<usize>> {
+pub(crate) fn exhaustive_permutations(input: Vec<usize>, processed_input: Vec<bool>) -> Vec<Vec<usize>> {
     if processed_input
         .iter()
         .fold(0_usize, |acc, elem| acc + if *elem { 1 } else { 0 })

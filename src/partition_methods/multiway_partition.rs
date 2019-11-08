@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::ops::Add;
+
 use crate::permutations::exhaustive_finder::find_all_permutations;
 
 // At each Node, there is either a single element that indicates a KK heuristic
@@ -8,12 +9,13 @@ use crate::permutations::exhaustive_finder::find_all_permutations;
 enum NodeBranch {
     More(Vec<NodeBranch>),
     Score(Vec<Vec<usize>>, f32),
-    Pruned()
+    Pruned(),
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct EvenSizedBinNodeTree {
     data: NodeBranch,
+    sort_order: Vec<usize>
 }
 
 #[derive(Clone, Debug)]
@@ -55,10 +57,7 @@ fn create_multi_way_partition_tree(
     if tuple.len() == 1 {
         let final_tuple = tuple.clone().pop().unwrap();
         let score = final_tuple.data.into_iter().fold(0.0_f32, f32::add);
-        NodeBranch::Score(
-            final_tuple.bin_assignments,
-            score,
-        )
+        NodeBranch::Score(final_tuple.bin_assignments, score)
     } else {
         let permutation_input = (0..partitions).collect::<Vec<usize>>();
         let permutations = find_all_permutations(permutation_input);
@@ -95,10 +94,18 @@ fn create_multi_way_partition_tree(
 
                 // After Normalisation, return early if the remaining elements cannot be placed
                 // in an ideal situation better than a naive solve
-                if (permutation_tuple.clone().into_iter().fold(std::f32::MIN, f32::max) -
-                    tuple.clone()[2..].to_owned().iter().fold(0.0_f32, |acc, tuple_elem| {
-                        acc + tuple_elem.sum()
-                    }) / partitions as f32).abs() > naive_estimate {
+                if (permutation_tuple
+                    .clone()
+                    .into_iter()
+                    .fold(std::f32::MIN, f32::max)
+                    - tuple.clone()[2..]
+                    .to_owned()
+                    .iter()
+                    .fold(0.0_f32, |acc, tuple_elem| acc + tuple_elem.sum())
+                    / partitions as f32)
+                    .abs()
+                    > naive_estimate
+                {
                     NodeBranch::Pruned()
                 } else {
                     let mut permutation_tuple: Vec<Tuple> = {
@@ -114,18 +121,12 @@ fn create_multi_way_partition_tree(
                     permutation_tuple
                         .sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
 
-                    create_multi_way_partition_tree(
-                        permutation_tuple,
-                        naive_estimate,
-                        partitions,
-                    )
+                    create_multi_way_partition_tree(permutation_tuple, naive_estimate, partitions)
                 }
             })
-            .filter(|branch| {
-                match branch {
-                    NodeBranch::Pruned() => false,
-                    _ => true
-                }
+            .filter(|branch| match branch {
+                NodeBranch::Pruned() => false,
+                _ => true,
             })
             .collect::<Vec<NodeBranch>>();
         NodeBranch::More(result_tuple)
@@ -135,12 +136,24 @@ fn create_multi_way_partition_tree(
 impl EvenSizedBinNodeTree {
     fn new(data: Vec<f32>, partitions: usize) -> EvenSizedBinNodeTree {
         let naive_estimate = data.clone().into_iter().fold(0.0_f32, f32::add)
-            / (data.len() as f32 / partitions  as f32);
-        let mut binary_tree_data = data.clone();
-        let mut index: usize = 0_usize;
+            / (partitions as f32);
+
+        let mut binary_tree_data = data
+            .clone()
+            .into_iter()
+            .enumerate()
+            .collect::<Vec<(usize, f32)>>();
+
         // Forward Sort with intention to pop for reverse ordering
-        binary_tree_data.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        binary_tree_data
+            .sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        let mut sort_order: Vec<usize> = binary_tree_data.clone().into_iter().map(|(index, _)| index).collect();
+        sort_order.reverse();
+        let mut binary_tree_data: Vec<f32> = binary_tree_data.into_iter().map(|(_, elem)| elem).collect();
+
         let mut tuple: Vec<Tuple> = Vec::with_capacity(data.len());
+        let mut index: usize = 0_usize;
         while let Some(initial_state_element) = binary_tree_data.pop() {
             // Could replace this with a Binary Heap, as it'll ensure
             // ordering on the internal elements for the tuple
@@ -155,40 +168,54 @@ impl EvenSizedBinNodeTree {
             index += 1_usize;
         }
         EvenSizedBinNodeTree {
-            data: create_multi_way_partition_tree(tuple.clone(), naive_estimate, partitions),
+            data: create_multi_way_partition_tree(tuple, naive_estimate, partitions),
+            sort_order
         }
     }
 
     fn flatten_node_tree(self) -> Vec<(Vec<Vec<usize>>, f32)> {
-        fn flatten_node_point(initial_point : NodeBranch) -> Vec<NodeBranch> {
+        fn flatten_node_point(initial_point: NodeBranch) -> Vec<NodeBranch> {
             match initial_point {
-                NodeBranch::More(point) => {
-                    point.into_iter().map(flatten_node_point).flatten().collect::<Vec<NodeBranch>>()
-                },
+                NodeBranch::More(point) => point
+                    .into_iter()
+                    .map(flatten_node_point)
+                    .flatten()
+                    .collect::<Vec<NodeBranch>>(),
                 NodeBranch::Score(bin, score) => vec![NodeBranch::Score(bin, score)],
-                _ => unimplemented!()
+                _ => unimplemented!(),
             }
         };
         flatten_node_point(self.data)
             .iter()
-            .map(|point| {
-                match point {
-                    NodeBranch::Score(bin, score) => {(bin.clone(), *score)},
-                    _ => unreachable!()
-                }
+            .map(|point| match point {
+                NodeBranch::Score(bin, score) => (bin.clone(), *score),
+                _ => unreachable!(),
             })
             .collect::<Vec<(Vec<Vec<usize>>, f32)>>()
     }
 }
 
-
 /// Partition Elements into Evenly Summed Groups
 /// Uses a complete method of the Karmarkar-Karp differencing algorithm to best partition elements
 /// into a specified number of partitions.
-pub fn multiway_partition(data: Vec<f32>, partitions: usize) -> (Vec<Vec<usize>>, f32) {
-    let mut group = EvenSizedBinNodeTree::new(data, partitions).flatten_node_tree();
-    group.sort_by(|a,b| {
-        (b.1).partial_cmp(&(a.1)).unwrap_or(std::cmp::Ordering::Equal)
+pub(crate) fn multiway_partition(data: Vec<f32>, partitions: usize) -> Vec<Vec<usize>> {
+    let node_tree: EvenSizedBinNodeTree = EvenSizedBinNodeTree::new(data, partitions);
+    let sort_order: Vec<usize> = node_tree.sort_order.clone();
+    let mut group = node_tree.flatten_node_tree();
+
+    group.sort_by(|a, b| {
+        (b.1)
+            .partial_cmp(&(a.1))
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
-    group.pop().unwrap()
+    let ideal_sort = group.pop().unwrap();
+    // Reorder Sort from Max->Min to Original Order
+    ideal_sort.0
+        .into_iter()
+        .map(|element_group| {
+            element_group.into_iter().map(|item| {
+                sort_order[item]
+            }).collect::<Vec<usize>>()
+        })
+        .collect::<Vec<Vec<usize>>>()
 }
