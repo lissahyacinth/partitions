@@ -33,7 +33,7 @@ pub struct CategoryMetrics {
 
 fn exhaustive_segments(input: Vec<usize>, groups: usize) -> Vec<Vec<Vec<usize>>> {
     if groups == 1 {
-        return vec![vec![input.clone()]];
+        return vec![vec![input]];
     } else {
         (1..=(input.len() - groups + 1))
             .map(|i| {
@@ -88,13 +88,16 @@ pub(crate) fn segments(
 fn fisher_score(indexes: Vec<Vec<usize>>, data: &CategoryMetrics) -> f32 {
     indexes.iter().fold(0.0, |acc, index_group| {
         let strata_mean: f32 = index_group.clone().into_iter().fold(0.0_f32, |acc, index| {
-            acc + data.elements_per_group[index] as f32 * data.group_mean[index]
+            data.group_mean[index].mul_add(
+                data.elements_per_group[index] as f32,
+                acc,
+            )
         }) / (index_group.clone().len() as f32);
 
         acc + index_group.iter().fold(0.0_f32, |acc, index| {
-            acc + (data.elements_per_group[*index] as f32
-                * (data.group_mean[*index] - strata_mean)
-                * (data.group_mean[*index] - strata_mean))
+            acc + (data.group_mean[*index] - strata_mean).mul_add(
+                data.group_mean[*index] - strata_mean,
+                data.elements_per_group[*index] as f32)
         })
     })
 }

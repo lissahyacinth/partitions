@@ -1,12 +1,32 @@
-use crate::partition_methods::multiway_partition::multiway_partition;
+use crate::partition_methods::multiway_partition::EvenSizedBinNodeTree;
 use crate::partition_methods::preserve_information::{create_category_metrics, segments};
 
 pub mod partition_methods;
 pub(crate) mod permutations;
 
-/// Group Vector into Even Partitions
-pub fn evenly_partition_input(input: Vec<f32>, partitions: usize) -> Vec<Vec<usize>> {
-    multiway_partition(input, partitions)
+/// Partition Elements into Evenly Summed Groups
+/// Uses a complete method of the Karmarkar-Karp differencing algorithm to best partition elements
+/// into a specified number of partitions.
+pub fn multiway_partition(data: Vec<f32>, partitions: usize) -> Vec<Vec<usize>> {
+    let node_tree: EvenSizedBinNodeTree = EvenSizedBinNodeTree::new(data, partitions);
+    let sort_order: Vec<usize> = node_tree.sort_order.clone();
+    let mut group = node_tree.flatten_node_tree();
+
+    group.sort_by(|a, b| {
+        (b.1)
+            .partial_cmp(&(a.1))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let ideal_sort = group.pop().unwrap();
+    // Reorder Sort from Max->Min to Original Order
+    ideal_sort.0
+        .into_iter()
+        .map(|element_group| {
+            element_group.into_iter().map(|item| {
+                sort_order[item]
+            }).collect::<Vec<usize>>()
+        })
+        .collect::<Vec<Vec<usize>>>()
 }
 
 /// Identify Highest Information Preserving Segments of a Numeric Group
@@ -15,7 +35,7 @@ pub fn evenly_partition_input(input: Vec<f32>, partitions: usize) -> Vec<Vec<usi
 ///
 /// # Returns
 /// Single Best Partitions of Vec<Group - Vec<Group ID>>
-pub fn bin_by_preserved_information(
+pub fn partition_by_information(
     group_column: Vec<usize>,
     element_column: Vec<f32>,
 ) -> Vec<Vec<usize>> {
@@ -30,13 +50,14 @@ pub fn bin_by_preserved_information(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::multiway_partition;
+    use crate::partition_by_information;
 
     #[test]
     fn even_partitioning() {
         let input: Vec<f32> = vec![400_f32, 300_f32, 50_f32, 300_f32, 70_f32, 30_f32];
         assert_eq!(
-            evenly_partition_input(input, 2),
+            multiway_partition(input, 2),
             vec![
                 vec![1, 3],
                 vec![0, 4, 2, 5]
@@ -52,7 +73,7 @@ mod tests {
             250_f32, 300_f32, // 550
             100_f32, 400_f32]; // 500
         assert_eq!(
-            bin_by_preserved_information(input_categories, input),
+            partition_by_information(input_categories, input),
             vec![
                 vec![1],
                 vec![0, 2]

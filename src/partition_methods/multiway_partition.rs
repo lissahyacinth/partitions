@@ -15,29 +15,29 @@ enum NodeBranch {
 #[derive(Clone, Debug)]
 pub(crate) struct EvenSizedBinNodeTree {
     data: NodeBranch,
-    sort_order: Vec<usize>
+    pub(crate) sort_order: Vec<usize>
 }
 
 #[derive(Clone, Debug)]
-struct Tuple {
+struct KarmarkerTuple {
     data: Vec<f32>,
     bin_assignments: Vec<Vec<usize>>,
 }
 
-impl Tuple {
+impl KarmarkerTuple {
     fn sum(&self) -> f32 {
         self.data.clone().into_iter().fold(0.0_f32, f32::add)
     }
 }
 
-impl PartialOrd for Tuple {
-    fn partial_cmp(&self, other: &Tuple) -> Option<Ordering> {
+impl PartialOrd for KarmarkerTuple {
+    fn partial_cmp(&self, other: &KarmarkerTuple) -> Option<Ordering> {
         self.sum().partial_cmp(&other.sum())
     }
 }
 
-impl PartialEq for Tuple {
-    fn eq(&self, other: &Tuple) -> bool {
+impl PartialEq for KarmarkerTuple {
+    fn eq(&self, other: &KarmarkerTuple) -> bool {
         self.sum() != other.sum()
     }
 }
@@ -45,7 +45,7 @@ impl PartialEq for Tuple {
 /// Multiway Partitioning of Evenly Sized Bins - Complete Karmarkar-Karp Algorithm (CKK)
 /// Written with guidance from https://www.ijcai.org/Proceedings/09/Papers/096.pdf
 fn create_multi_way_partition_tree(
-    tuple: Vec<Tuple>,
+    tuple: Vec<KarmarkerTuple>,
     naive_estimate: f32,
     partitions: usize,
 ) -> NodeBranch {
@@ -55,9 +55,9 @@ fn create_multi_way_partition_tree(
         case.
     */
     if tuple.len() == 1 {
-        let final_tuple = tuple.clone().pop().unwrap();
-        let score = final_tuple.data.into_iter().fold(0.0_f32, f32::add);
-        NodeBranch::Score(final_tuple.bin_assignments, score)
+        let bin_assignments = tuple[0].bin_assignments.clone();
+        let score = tuple[0].data.clone().into_iter().fold(0.0_f32, f32::add);
+        NodeBranch::Score(bin_assignments, score)
     } else {
         let permutation_input = (0..partitions).collect::<Vec<usize>>();
         let permutations = find_all_permutations(permutation_input);
@@ -108,12 +108,12 @@ fn create_multi_way_partition_tree(
                 {
                     NodeBranch::Pruned()
                 } else {
-                    let mut permutation_tuple: Vec<Tuple> = {
-                        let mut extended_tuple: Vec<Tuple> = vec![Tuple {
+                    let mut permutation_tuple: Vec<KarmarkerTuple> = {
+                        let mut extended_tuple: Vec<KarmarkerTuple> = vec![KarmarkerTuple {
                             data: permutation_tuple,
                             bin_assignments: highest_tuple_bin_assignment,
                         }];
-                        let existing_tuples: Vec<Tuple> =
+                        let existing_tuples: Vec<KarmarkerTuple> =
                             tuple.clone()[2..].to_owned().into_iter().collect();
                         extended_tuple.extend(existing_tuples);
                         extended_tuple
@@ -134,7 +134,7 @@ fn create_multi_way_partition_tree(
 }
 
 impl EvenSizedBinNodeTree {
-    fn new(data: Vec<f32>, partitions: usize) -> EvenSizedBinNodeTree {
+    pub(crate) fn new(data: Vec<f32>, partitions: usize) -> EvenSizedBinNodeTree {
         let naive_estimate = data.clone().into_iter().fold(0.0_f32, f32::add)
             / (partitions as f32);
 
@@ -152,7 +152,7 @@ impl EvenSizedBinNodeTree {
         sort_order.reverse();
         let mut binary_tree_data: Vec<f32> = binary_tree_data.into_iter().map(|(_, elem)| elem).collect();
 
-        let mut tuple: Vec<Tuple> = Vec::with_capacity(data.len());
+        let mut tuple: Vec<KarmarkerTuple> = Vec::with_capacity(data.len());
         let mut index: usize = 0_usize;
         while let Some(initial_state_element) = binary_tree_data.pop() {
             // Could replace this with a Binary Heap, as it'll ensure
@@ -161,7 +161,7 @@ impl EvenSizedBinNodeTree {
             ins_vec[0] = initial_state_element;
             let mut bin_assignments: Vec<Vec<usize>> = vec![vec![]; partitions];
             bin_assignments[0].push(index);
-            tuple.push(Tuple {
+            tuple.push(KarmarkerTuple {
                 data: ins_vec,
                 bin_assignments,
             });
@@ -173,7 +173,7 @@ impl EvenSizedBinNodeTree {
         }
     }
 
-    fn flatten_node_tree(self) -> Vec<(Vec<Vec<usize>>, f32)> {
+    pub(crate) fn flatten_node_tree(self) -> Vec<(Vec<Vec<usize>>, f32)> {
         fn flatten_node_point(initial_point: NodeBranch) -> Vec<NodeBranch> {
             match initial_point {
                 NodeBranch::More(point) => point
@@ -195,27 +195,3 @@ impl EvenSizedBinNodeTree {
     }
 }
 
-/// Partition Elements into Evenly Summed Groups
-/// Uses a complete method of the Karmarkar-Karp differencing algorithm to best partition elements
-/// into a specified number of partitions.
-pub(crate) fn multiway_partition(data: Vec<f32>, partitions: usize) -> Vec<Vec<usize>> {
-    let node_tree: EvenSizedBinNodeTree = EvenSizedBinNodeTree::new(data, partitions);
-    let sort_order: Vec<usize> = node_tree.sort_order.clone();
-    let mut group = node_tree.flatten_node_tree();
-
-    group.sort_by(|a, b| {
-        (b.1)
-            .partial_cmp(&(a.1))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    let ideal_sort = group.pop().unwrap();
-    // Reorder Sort from Max->Min to Original Order
-    ideal_sort.0
-        .into_iter()
-        .map(|element_group| {
-            element_group.into_iter().map(|item| {
-                sort_order[item]
-            }).collect::<Vec<usize>>()
-        })
-        .collect::<Vec<Vec<usize>>>()
-}
