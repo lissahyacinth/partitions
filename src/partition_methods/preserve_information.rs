@@ -1,35 +1,4 @@
-use frequency::Frequency;
-use frequency_hashmap::HashMapFrequency;
-use std::collections::HashMap;
-
-pub(crate) fn create_category_metrics(group_definition: Vec<usize>, element_value: Vec<f32>) -> CategoryMetrics {
-    let group_frequency: HashMapFrequency<usize, usize> =
-        group_definition.clone().into_iter().collect();
-    let mut group_mean: HashMap<usize, f32> = HashMap::new();
-    let n_groups: f32 = group_frequency.items().len() as f32;
-    for (group, element) in
-        group_definition
-            .into_iter()
-            .zip(element_value.into_iter()) {
-        if let Some(x) = group_mean.get_mut(&group) {
-            *x += element / n_groups
-        } else {
-            group_mean.insert(group, element / n_groups);
-        }
-    }
-    CategoryMetrics {
-        group: group_frequency.items().copied().collect::<Vec<usize>>(),
-        elements_per_group: group_frequency.counts().copied().collect::<Vec<usize>>(),
-        group_mean: group_frequency.items().map(|group| group_mean[group]).collect(),
-    }
-}
-
-#[derive(Clone)]
-pub struct CategoryMetrics {
-    pub group: Vec<usize>,
-    pub elements_per_group: Vec<usize>,
-    pub group_mean: Vec<f32>,
-}
+use crate::partition_methods::category_metrics::CategoryMetrics;
 
 fn exhaustive_segments(input: Vec<usize>, groups: usize) -> Vec<Vec<Vec<usize>>> {
     if groups == 1 {
@@ -53,7 +22,7 @@ fn exhaustive_segments(input: Vec<usize>, groups: usize) -> Vec<Vec<Vec<usize>>>
     }
 }
 
-pub(crate) fn segments(
+pub fn segments(
     group_id: &[usize],
     group_descriptors: &CategoryMetrics,
     groups: usize,
@@ -87,17 +56,19 @@ pub(crate) fn segments(
 
 fn fisher_score(indexes: Vec<Vec<usize>>, data: &CategoryMetrics) -> f32 {
     indexes.iter().fold(0.0, |acc, index_group| {
+        let strata_elements = index_group.clone().into_iter().fold(0f32, |acc, index| acc+data.elements_per_group[index] as f32);
+        // Mean of each index group
         let strata_mean: f32 = index_group.clone().into_iter().fold(0.0_f32, |acc, index| {
             data.group_mean[index].mul_add(
                 data.elements_per_group[index] as f32,
                 acc,
             )
-        }) / (index_group.clone().len() as f32);
-
+        }) / strata_elements;
+        // Difference of each index group from the mean squared, plus the number of elements per group?
         acc + index_group.iter().fold(0.0_f32, |acc, index| {
-            acc + (data.group_mean[*index] - strata_mean).mul_add(
-                data.group_mean[*index] - strata_mean,
-                data.elements_per_group[*index] as f32)
+            acc + (data.group_mean[*index] - strata_mean) *
+                (data.group_mean[*index] - strata_mean) *
+                (data.elements_per_group[*index] as f32)
         })
     })
 }

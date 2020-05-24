@@ -1,5 +1,6 @@
 use crate::partition_methods::multiway_partition::EvenSizedBinNodeTree;
-use crate::partition_methods::preserve_information::{create_category_metrics, segments};
+use crate::partition_methods::preserve_information::{segments};
+use crate::partition_methods::category_metrics::CategoryMetricInfo;
 
 pub mod partition_methods;
 pub(crate) mod permutations;
@@ -29,29 +30,39 @@ pub fn multiway_partition(data: Vec<f32>, partitions: usize) -> Vec<Vec<usize>> 
         .collect::<Vec<Vec<usize>>>()
 }
 
-/// Identify Highest Information Preserving Segments of a Numeric Group
-/// Using Fisher Score (Closest Sample Standard Deviations to initial Population), identify
-/// the best segments (groups of groups) to preserve.
-///
-/// # Returns
-/// Single Best Partitions of Vec<Group - Vec<Group ID>>
-pub fn partition_by_information(
-    group_column: Vec<usize>,
-    element_column: Vec<f32>,
-) -> Vec<Vec<usize>> {
-    let group_descriptors = create_category_metrics(
-        group_column,
-        element_column);
-    let target_bins: usize = std::cmp::max(2_usize, (group_descriptors.group.len() as f32).cbrt() as usize);
-    segments(&group_descriptors.group, &group_descriptors, target_bins)
-        .pop()
-        .unwrap()
+pub trait Partition {
+    /// Identify Highest Information Preserving Segments of a Group
+    /// Using Fisher Score (Closest Sample Standard Deviations to initial Population), identify
+    /// the best segments (groups of groups) to preserve.
+    ///
+    /// # Returns
+    /// Single Best Partitions of Vec<Group - Vec<Group ID>>
+    fn partition_by_information(self, group: Vec<usize>) -> Vec<Vec<usize>>;
+}
+
+impl Partition for Vec<f32> {
+    fn partition_by_information(self, group: Vec<usize>) -> Vec<Vec<usize>> {
+        let group_descriptors = self.metrics(group);
+        let target_bins: usize = std::cmp::max(2_usize, (group_descriptors.group.len() as f32).cbrt() as usize);
+        segments(&group_descriptors.group, &group_descriptors, target_bins)
+            .pop()
+            .unwrap()
+    }
+}
+
+impl Partition for Vec<bool> {
+    fn partition_by_information(self, group: Vec<usize>) -> Vec<Vec<usize>> {
+        let group_descriptors = self.metrics(group);
+        let target_bins: usize = std::cmp::max(2_usize, (group_descriptors.group.len() as f32).cbrt() as usize);
+        segments(&group_descriptors.group, &group_descriptors, target_bins)
+            .pop()
+            .unwrap()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::multiway_partition;
-    use crate::partition_by_information;
+    use crate::{multiway_partition, Partition};
 
     #[test]
     fn even_partitioning() {
@@ -66,17 +77,35 @@ mod tests {
     }
 
     #[test]
-    fn preserved_info_partitioning() {
+    fn preserved_info_partitioning_float() {
         let input_categories: Vec<usize> = vec![0, 0, 1, 1, 2, 2];
         let input: Vec<f32> = vec![
             400_f32, 50_f32, // 450
             250_f32, 300_f32, // 550
             100_f32, 400_f32]; // 500
         assert_eq!(
-            partition_by_information(input_categories, input),
+            input.partition_by_information(input_categories),
             vec![
                 vec![1],
                 vec![0, 2]
+            ]
+        );
+    }
+
+    #[test]
+    fn preserved_info_partitioning_bool() {
+        let input_categories: Vec<usize> = vec![0, 0, 0, 0,
+                                                1, 1, 1, 1,
+                                                2, 2, 2, 2];
+        let input: Vec<bool> = vec![
+            false, false, false, true,
+            false, false, false, false,
+            true, true, true, true];
+        assert_eq!(
+            input.partition_by_information(input_categories),
+            vec![
+                vec![1, 0],
+                vec![2]
             ]
         );
     }
